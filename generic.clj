@@ -4,12 +4,12 @@
             [clojure.string :as str]
             [clojure.tools.logging :as log]
             [clojure.java.jdbc :as jdbc]
+            [com.shudi.func.comm :as comm]
             [clojure.data.json :as json]
             [clojure.walk :as walk]
             [clojure.edn :as edn]
             [clj-time.local :as local]
-            [clj-time.coerce :as coerce]
-            [com.shudi.func.comm :as comm])
+            [clj-time.coerce :as coerce])
   (:import (java.sql Connection PreparedStatement)
            (com.shudi.func.utils SigUtil DateUtil Arithmetic)
            (java.text SimpleDateFormat DecimalFormat)
@@ -971,23 +971,16 @@
   {:pre [(not (nil? conn))
          (or (symbol? column) (and (string? column) (not (str/index-of column "*"))))
          (and (map? where) (not-empty where))]}
-  (letfn [(set-stmt-params
-            [stmt params]
-            {:pre [(some? stmt)]}
-            (loop [idx 1 p params]
-              (if (seq p)
-                (do (jdbc/set-parameter (first p) stmt idx) (recur (inc idx) (next p)))
-                stmt)))]
-   (let [col (str "`" (str/trim column) "`")
-         params (mapv (fn [[_ v]] v) where)
-         cd (str/join " and " (mapv (fn [[k _]] (str/join "=" [(str "`" (str/trim k) "`") "?"])) where))
-         sql (str/join " " ["select" col "from" (str "`" (str/trim table) "`") "where" cd])]
-     (log/debug "query-sql " sql params)
-     (let [stmt ^PreparedStatement (jdbc/prepare-statement ^Connection conn sql)]
-       (let [rs (.executeQuery (set-stmt-params stmt params))
-             r (jdbc/result-set-seq rs {:keywordize? false})]
-         (when (seq r)
-           (get (first r) (first (keys (first r))))))))))
+  (let [col (str "`" (str/trim column) "`")
+        params (mapv (fn [[_ v]] v) where)
+        cd (str/join " and " (mapv (fn [[k _]] (str/join "=" [(str "`" (str/trim k) "`") "?"])) where))
+        sql (str/join " " ["select" col "from" (str "`" (str/trim table) "`") "where" cd])]
+    (log/debug "query-sql " sql params)
+    (let [stmt ^PreparedStatement (jdbc/prepare-statement ^Connection conn sql)]
+      (let [rs (.executeQuery (comm/set-stmt-params stmt params))
+            r (jdbc/result-set-seq rs {:keywordize? false})]
+        (when (seq r)
+          (get (first r) (first (keys (first r)))))))))
 
 
 (defn sql-update
@@ -1005,23 +998,16 @@
   {:pre [(not (nil? conn))
          (and (map? column) (not-empty column))
          (and (map? where) (not-empty where))]}
-  (letfn [(set-stmt-params
-            [stmt params]
-            {:pre [(some? stmt)]}
-            (loop [idx 1 p params]
-              (if (seq p)
-                (do (jdbc/set-parameter (first p) stmt idx) (recur (inc idx) (next p)))
-                stmt)))]
-   (let [col (str/join " , " (mapv (fn [[k _]] (str/join "=" [(str "`" (str/trim k) "`") "?"])) column))
-         u-params (mapv (fn [[_ v]] (str v)) column)
-         cd (str/join " and " (mapv (fn [[k _]] (str/join "=" [(str "`" (str/trim k) "`") "?"])) where))
-         w-params (mapv (fn [[_ v]] (str v)) where)
-         sql (str/join " " ["update" (str "`" (str/trim table) "`") "set" col "where" cd])
-         params (into [] (concat u-params w-params))]
-     (log/debug "update-sql-fun " sql u-params w-params)
-     (let [stmt ^PreparedStatement (jdbc/prepare-statement ^Connection conn sql)]
-       (let [rs (.executeUpdate (set-stmt-params stmt params))]
-         rs)))))
+  (let [col (str/join " , " (mapv (fn [[k _]] (str/join "=" [(str "`" (str/trim k) "`") "?"])) column))
+        u-params (mapv (fn [[_ v]] (str v)) column)
+        cd (str/join " and " (mapv (fn [[k _]] (str/join "=" [(str "`" (str/trim k) "`") "?"])) where))
+        w-params (mapv (fn [[_ v]] (str v)) where)
+        sql (str/join " " ["update" (str "`" (str/trim table) "`") "set" col "where" cd])
+        params (into [] (concat u-params w-params))]
+    (log/debug "update-sql-fun " sql u-params w-params)
+    (let [stmt ^PreparedStatement (jdbc/prepare-statement ^Connection conn sql)]
+      (let [rs (.executeUpdate (comm/set-stmt-params stmt params))]
+        rs))))
 
 (defn len
   "   函数：len(coll)
